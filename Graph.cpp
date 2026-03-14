@@ -1,13 +1,15 @@
 #include "Graph.hpp"
 using namespace std;
 
+//Satvik Balakrishnan
+
 // NodeInfo -----------------------------------------------------------------------------------------------------------------------------------
 
 NodeInfo::NodeInfo() {
     preActivationValue = 0;
     bias = 0;
     activationFunction = identity;
-    activationDerivative = identity;
+    activationDerivative = identity_prime;
     activate();
     delta = 0;
 }
@@ -91,36 +93,50 @@ std::ostream& operator<<(std::ostream& out, const Connection& c) {
 
 // STUDENT TODO: IMPLEMENT
 void Graph::updateNode(int id, NodeInfo n) {
-    if (/* id is out of bounds — check if id is a valid index into nodes */ true) {
+
+    if (id < 0 || id >= size) {
         cout << "Attempting to update node with id: " << id << " but node does not exist" << endl;
         return;
     }
 
-    return; //stub
+    if (nodes.at(id) != nullptr) {
+        delete nodes.at(id);
+    }
+
+    nodes.at(id) = new NodeInfo(n);
 }
 
 // STUDENT TODO: IMPLEMENT
 NodeInfo* Graph::getNode(int id) const {
-    return nullptr; //stub
+    if(id < 0 || id >= nodes.size()){
+        return nullptr;
+    }
+
+    return nodes.at(id);
 }
 
 // STUDENT TODO: IMPLEMENT
 void Graph::updateConnection(int v, int u, double w) {
-    if (/* v is out of bounds — check if v is a valid index into nodes */ true) {
+    if (v < 0 || v >= nodes.size()) {
         cerr << "Attempting to update connection between " << v << " and " << u << " with weight " << w << " but " << v << " does not exist" << endl;
         exit(1);
     }
-    if (/* u is out of bounds — check if u is a valid index into nodes */ true) {
+    if (u < 0 || u >= nodes.size()) {
         cerr << "Attempting to update connection between " << v << " and " << u << " with weight " << w << " but " << u << " does not exist" << endl;
         exit(1);
     }
 
-    return; //stub
+    adjacencyList.at(v)[u] = Connection(v, u, w);
 }
 
 // STUDENT TODO: IMPLEMENT
 void Graph::clear() {
-    return; //stub
+    for(int i=0; i<nodes.size(); i++){
+        if(nodes.at(i) != nullptr){
+            delete nodes.at(i);
+            nodes.at(i) = nullptr;
+        }
+    }
 }
 
 
@@ -198,9 +214,8 @@ ostream& operator<<(ostream& out, const Graph& g) {
 void Graph::resize(int size) {
     this->size = size;
     adjacencyList.resize(size);
-    for (int i = 0; i < size; i++) {
-        nodes.push_back(nullptr);
-    }
+    nodes.clear();
+    nodes.resize(size, nullptr);
 }
 
 vector<NodeInfo*> Graph::getNodes() const {

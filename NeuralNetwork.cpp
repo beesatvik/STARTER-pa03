@@ -1,5 +1,9 @@
-// includes
+//Satvik Balakrishnan
+
+
 #include "NeuralNetwork.hpp"
+#include "Trace.hpp"
+#include <unordered_set>
 using namespace std;
 
 
@@ -8,37 +12,37 @@ using namespace std;
 
 // STUDENT TODO: IMPLEMENT
 void NeuralNetwork::eval() {
-    //stub
+    evaluating = true;
 }
 
 // STUDENT TODO: IMPLEMENT
 void NeuralNetwork::train() {
-    //stub
+    evaluating = false;
 }
 
 // STUDENT TODO: IMPLEMENT
 void NeuralNetwork::setLearningRate(double lr) {
-    //stub
+    learningRate = lr;
 }
 
 // STUDENT TODO: IMPLEMENT
 void NeuralNetwork::setInputNodeIds(std::vector<int> inputNodeIds) {
-    //stub
+    this->inputNodeIds = inputNodeIds;
 }
 
 // STUDENT TODO: IMPLEMENT
 void NeuralNetwork::setOutputNodeIds(std::vector<int> outputNodeIds) {
-    //stub
+    this->outputNodeIds = outputNodeIds;
 }
 
 // STUDENT TODO: IMPLEMENT
 vector<int> NeuralNetwork::getInputNodeIds() const {
-    return vector<int>(); //stub
+    return inputNodeIds;
 }
 
 // STUDENT TODO: IMPLEMENT
 vector<int> NeuralNetwork::getOutputNodeIds() const {
-    return vector<int>(); //stub
+    return outputNodeIds;
 }
 
 // STUDENT TODO: IMPLEMENT
@@ -54,12 +58,39 @@ vector<double> NeuralNetwork::predict(DataInstance instance) {
         return vector<double>();
     }
 
-    // BFT implementation goes here.
-    // Note: before traversal begins, each input value in `input` must be loaded into
-    // the corresponding input node's postActivationValue. Input nodes are not activated —
-    // their value is passed forward directly.
-    // Use visitPredictNode and visitPredictNeighbor to handle the neural network math
-    // at each step of your traversal.
+    queue<int> ids;
+    unordered_set<int> found;
+
+    for(int i = 0; i<inputNodeIds.size(); i++){
+
+        ids.push(inputNodeIds[i]);
+        found.insert(inputNodeIds[i]);
+        nodes[inputNodeIds[i]]->preActivationValue = input[i];
+        nodes[inputNodeIds[i]]->postActivationValue = input[i];
+
+    }
+
+    while(!ids.empty()){
+        int nodeId = ids.front();
+        ids.pop();
+        visitPredictNode(nodeId);
+
+        AdjList& adj = getAdjacencyList();
+
+        for(auto it = adjacencyList.at(nodeId).begin(); it != adjacencyList.at(nodeId).end(); it++){
+
+            int otherNode = it->first;
+            Connection connection = it->second;
+
+            visitPredictNeighbor(connection);
+
+            if(found.find(otherNode) == found.end()){
+                ids.push(otherNode);
+                found.insert(otherNode);
+            }
+        }
+
+    }
 
     vector<double> output;
     for (int i = 0; i < outputNodeIds.size(); i++) {
@@ -80,15 +111,9 @@ vector<double> NeuralNetwork::predict(DataInstance instance) {
 }
 // STUDENT TODO: IMPLEMENT
 bool NeuralNetwork::contribute(double y, double p) {
-
-    // DFT implementation goes here.
-    // This function initiates the recursion by calling the recursive helper
-    // starting from each input layer node.
-    // Note: input layer nodes do not have a bias to update, so visitContributeNode
-    // should not be called on them.
-    // The contributions map acts as your "visited" set and also stores each node's
-    // computed contribution so it is not recomputed if reached by multiple paths.
-
+    for(int id : inputNodeIds){
+        contribute(id, y, p);
+    }
 
     flush();
 
@@ -96,7 +121,7 @@ bool NeuralNetwork::contribute(double y, double p) {
 }
 // STUDENT TODO: IMPLEMENT
 double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
-
+    visitContributeStart(nodeId);
     // incomingContribution: the error signal returned by a recursive call on a neighbor.
     double incomingContribution = 0;
     // outgoingContribution: built up from this node's neighbors, then scaled by
@@ -105,32 +130,66 @@ double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
     NodeInfo* currNode = nodes.at(nodeId);
 
     // If this node is already in the contributions map, return its stored value immediately.
+    if (contributions.count(nodeId)) return contributions[nodeId];
 
     if (adjacencyList.at(nodeId).empty()) {
-        // Base case: output node (no outgoing connections).
-        // Seeds the backward pass with the initial error signal.
-        // You do not need to understand this derivation.
         outgoingContribution = -1 * ((y - p) / (p * (1 - p)));
     }
 
-    // Before returning, store outgoingContribution in the contributions map.
+    else{
 
+        for(auto& [otherNode, connection] : adjacencyList[nodeId]){
+
+            incomingContribution = contribute(otherNode, y, p);
+            visitContributeNeighbor(connection, incomingContribution, outgoingContribution);
+        }
+    }
+
+    bool isInputNode = false;
+    for(int inputNodeId : inputNodeIds){
+
+        if(inputNodeId == nodeId){
+            isInputNode = true;
+            break;
+
+        }
+
+    }
+
+    if(!isInputNode){
+
+        visitContributeNode(nodeId, outgoingContribution);
+
+    }
+
+    contributions[nodeId] = outgoingContribution;
     return outgoingContribution;
 }
 // STUDENT TODO: IMPLEMENT
 bool NeuralNetwork::update() {
-    // apply the derivative contributions
+    if(batchSize == 0){
+        flush();
+        return true;
+    }
 
-    // traverse the graph in anyway you want. 
-    // Each node has a delta term 
-    // Each connection has a delta term
+    for(NodeInfo* node : nodes){
 
-    // use the formulas for each update
-    // bias update: bias = bias - (learningRate * delta)
-    // weight update: weight = weight - (learningRate * delta)
-    // reset the delta term for each node and connection to zero.
-    
+        node->bias -= learningRate * node->delta;
+        node->delta = 0;
+
+    }
+
+    for(auto& neighbors : adjacencyList){
+        for(auto& [nodeId, connection] : neighbors){
+
+            connection.weight -= learningRate * connection.delta;
+            connection.delta = 0;
+
+        }
+    }
+
     flush();
+    batchSize = 0;
     return true;
     
 }
@@ -285,8 +344,22 @@ void NeuralNetwork::visitPredictNeighbor(Connection c) {
     NodeInfo* u = nodes.at(c.dest);
     double w = c.weight;
     u->preActivationValue += v->postActivationValue * w;
+
+    
 }
 
+void NeuralNetwork::visitContributeStart(int vId) {
+    NodeInfo* v = nodes.at(vId);
+    // visualization use
+    if (viz::isTracing()) {
+        viz::traceNodeState(0, "backward", vId,
+                            v->preActivationValue,
+                            v->postActivationValue,
+                            v->bias,
+                            v->delta,
+                            "stack");
+    }
+}
 // visitContributeNode: called after all neighbors of a node have been visited during DFT.
 // outgoingContribution at this point holds the sum of weighted incoming contributions
 // from the next layer. This function:
@@ -326,7 +399,6 @@ void NeuralNetwork::flush() {
         nodes.at(i)->preActivationValue = 0;
     }
     contributions.clear();
-    batchSize = 0;
 }
 
 double NeuralNetwork::assess(string filename) {
@@ -405,4 +477,3 @@ ostream& operator<<(ostream& out, const NeuralNetwork& nn) {
     out << static_cast<const Graph&>(nn) << endl;
     return out;
 }
-

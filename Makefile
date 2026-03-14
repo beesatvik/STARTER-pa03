@@ -5,10 +5,10 @@ targets=neuralnet test_neuralnet
 
 all: $(targets)
 
-neuralnet: main.o NeuralNetwork.o Graph.o DataLoader.o utility.o
+neuralnet: main.o NeuralNetwork.o Graph.o DataLoader.o utility.o Trace.o
 	$(CXX) $(CXX_FLAGS) $^ -o $@
 
-test_neuralnet: test_neuralnet.o NeuralNetwork.o Graph.o DataLoader.o utility.o tdd.o
+test_neuralnet: test_neuralnet.o NeuralNetwork.o Graph.o DataLoader.o utility.o Trace.o tdd.o
 	$(CXX) $(CXX_FLAGS) $^ -o $@
 
 test_neuralnet.o: test_neuralnet.cpp
@@ -28,6 +28,9 @@ DataLoader.o: DataLoader.cpp DataLoader.hpp
 
 utility.o: utility.cpp utility.hpp
 	$(CXX) $(CXX_FLAGS) utility.cpp -c 
+
+Trace.o: Trace.cpp Trace.hpp
+	$(CXX) $(CXX_FLAGS) Trace.cpp -c
 
 tdd.o: tdd.cpp tdd.hpp 
 	$(CXX) $(CXX_FLAGS) tdd.cpp -c
